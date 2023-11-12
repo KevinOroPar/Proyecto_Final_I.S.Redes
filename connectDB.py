@@ -1,12 +1,15 @@
 import mysql.connector
 from mysql.connector import errorcode
+from dotenv import load_dotenv
+import os
 
 # Configuración de la conexión a la bd.
+load_dotenv()
 config = {
-  'host':'redessem10.mysql.database.azure.com',
-  'user':'ciberadmin',
-  'password':'r3g3n9003#',
-  'database':'bancoksystems'
+  'host': os.getenv('DB_HOST'),
+  'user': os.getenv('DB_ADMIN'),
+  'password': os.getenv('DB_PASS'),
+  'database': os.getenv('DATABASE')
 }
 
 #Función que realiza la conexión a la bd y devuelve un cursor para su manipulación.
