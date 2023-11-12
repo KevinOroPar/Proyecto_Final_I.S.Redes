@@ -2,6 +2,8 @@ import asyncio
 from Crypto.Cipher import AES
 from dotenv import load_dotenv
 import os
+from connectDB import connectDB
+import werkzeug.security
 
 load_dotenv()
 
@@ -33,6 +35,7 @@ async def handle_clients(reader: asyncio.StreamReader, writer: asyncio.StreamWri
     await writer.wait_closed()
 
 async def login(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    conn, cursor = connectDB()
     cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
     ciphertext, tag = cipher.encrypt_and_digest("Bienvenido a el servidor, para iniciar por favor introduce tu nombre de usuario: ".encode())
     writer.write(cipher.nonce + ciphertext)
@@ -41,14 +44,32 @@ async def login(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     cipher = AES.new(trunk_encoded_key, AES.MODE_EAX, nonce=username[:16])
     message = cipher.decrypt(username[16:])
     print(ciphertext)
-    cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest("Ahora introduce tu contraseña: ".encode())
-    writer.write(cipher.nonce + ciphertext)
-    await writer.drain()
-    password = await reader.read(1024)
-    cipher = AES.new(trunk_encoded_key, AES.MODE_EAX, nonce=password[:16])
-    message = cipher.decrypt(password[16:])
-    print(ciphertext)
+    #Busca al usuario en la base de datos.
+    cursor.execute("SELECT * FROM usuarios WHERE username=%s", (message,))
+    usuario = cursor.fetchone()
+    if usuario:
+        print(f"{usuario[2]} encontrado")
+        cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
+        ciphertext, tag = cipher.encrypt_and_digest("Ahora introduce tu contraseña: ".encode())
+        writer.write(cipher.nonce + ciphertext)
+        await writer.drain()
+        password = await reader.read(1024)
+        cipher = AES.new(trunk_encoded_key, AES.MODE_EAX, nonce=password[:16])
+        message = cipher.decrypt(password[16:])
+        print(ciphertext)
+        #Verifica que la contraseña del usuario sea válida.
+        if werkzeug.security.check_password_hash(usuario[3], message.decode('ASCII')) == True:
+            print("El usuario ha ingresado con éxito.")
+            return True
+        else:
+            print("Contraseña incorrecta.")
+            #ciphertext, tag = cipher.encrypt_and_digest("Contraseña incorrecta.".encode())
+            return False
+    else:
+        print("Usuario no encontrado =(")
+        #ciphertext, tag = cipher.encrypt_and_digest("Usuario inválido".encode())
+        return False
+        
 
 async def run_server():
     server = await asyncio.start_server(handle_clients,HOST,PORT)
