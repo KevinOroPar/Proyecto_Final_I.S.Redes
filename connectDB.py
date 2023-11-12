@@ -27,3 +27,11 @@ def connectDB():
   else:
     cursor = conn.cursor()
     return conn, cursor
+
+#Función que muestra a los usuarios registrdos en la bd.  
+def getUsers(cursor):
+  cursor.execute("SELECT * FROM usuarios")
+  usuarios = cursor.fetchall()
+  print("ID, username, nombre completo, contraseña, saldo")
+  for usuario in usuarios:
+    print(usuario)
