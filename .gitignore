@@ -1,4 +1,6 @@
 .env
 .venv
 .vscode
-/_pycache_
+__pycache__
+server.crt
+server.key

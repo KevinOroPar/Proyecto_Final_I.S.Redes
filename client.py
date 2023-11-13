@@ -2,7 +2,9 @@ import asyncio
 from os import write
 from dotenv import load_dotenv
 from Crypto.Cipher import AES
-import os, re
+import os, re, ssl
+
+from server import CERTIFICATE_PATH
 
 load_dotenv()
 
@@ -16,8 +18,9 @@ trunk_encoded_key = encoded_key[:16]
 patron = re.compile(r'.*Salir$')
 
 async def run_client() -> None:
-
-        reader, writer = await asyncio.open_connection(HOST, PORT)
+        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        ssl_context.load_verify_locations(CERTIFICATE_PATH)
+        reader, writer = await asyncio.open_connection(HOST, PORT, ssl=ssl_context)
 
         while True:
             data = await reader.read(1024)
@@ -28,8 +31,8 @@ async def run_client() -> None:
             if ismatch:
                 writer.close()
                 await writer.wait_closed()
-                print("Conexión cerrada por el servidor =(")
                 print(msg[0:-5])
+                print("Conexión cerrada por el servidor =(")
                 break
             resp = input(msg)
             cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
