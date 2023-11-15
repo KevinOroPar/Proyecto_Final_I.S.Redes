@@ -2,5 +2,7 @@
 .venv
 .vscode
 __pycache__
-server.crt
-server.key
+imss.crt
+imss.key
+casa.crt
+casa.key
