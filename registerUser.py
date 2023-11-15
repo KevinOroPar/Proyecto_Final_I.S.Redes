@@ -8,11 +8,12 @@ owner = input('Ingrese nombre y un apellido: ')
 username = input('Ingrese nombre de usuario: ')
 password = input('Ingrese contraseña: ')
 balance = float(input('Ingrese saldo inicial: '))
+clabe = input('Ingrese su cuenta clabe')
 
 #Encriptación de la contraseña.
 hashed_password = werkzeug.security.generate_password_hash(password)
 #Inserción del usuario en la bd.
-cursor.execute("INSERT INTO usuarios(username, ownerAccount, password, balance) VALUES (%s, %s, %s,%s);", (username, owner, hashed_password, balance)) 
+cursor.execute("INSERT INTO usuarios(username, ownerAccount, password, balance, clabe) VALUES (%s, %s, %s,%s, %s);", (username, owner, hashed_password, balance, clabe)) 
 conn.commit()
 cursor.close()
 conn.close()
