@@ -3,7 +3,7 @@ from Crypto.Cipher import AES
 from dotenv import load_dotenv
 import os, ssl
 from pymysql import NULL
-from connectDB import connectDB, getUsers
+from connectDB import connectDB, getUsers, consultarSaldo, transferenciaSaldo
 import werkzeug.security
 
 load_dotenv()
@@ -18,6 +18,7 @@ if not shared_key:
     raise ValueError("La variable de entorno SHARED_KEY no está definida en el archivo .env")
 encoded_key = shared_key.encode("utf-8")
 trunk_encoded_key = encoded_key[:16]
+lock = asyncio.Lock()
 
 def showmenu(logged_user):
     msg = f"""Bienvenido a tu banca {logged_user[2]}, elije una de las siguientes opciones para continuar:
@@ -28,12 +29,12 @@ def showmenu(logged_user):
     return msg
 
 async def handle_clients(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-    conn, cursor = connectDB()
+    # conn, cursor = connectDB()
     connected_address = writer.get_extra_info('peername')
     if connected_address[0] in remote_addresses:
         print(f"cliente {connected_address[0]} ya está conectado, nueva conexión rechazada")
         cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
-        ciphertext, tag = cipher.encrypt_and_digest("Usted ya tiene un sesión activa Salir".encode())
+        ciphertext, tag = cipher.encrypt_and_digest("\n Usted ya tiene un sesión activa Salir".encode())
         writer.write(cipher.nonce + ciphertext)
         await writer.drain()
         writer.close()
@@ -43,7 +44,7 @@ async def handle_clients(reader: asyncio.StreamReader, writer: asyncio.StreamWri
         print(f"Nueva conexión recibida desde la IP {connected_address[0]}") 
         remote_addresses.append(connected_address[0])
 
-    msg, islogged, logged_user  = await login(reader,writer, cursor)
+    msg, islogged, logged_user  = await login(reader,writer)
     if islogged:
         # getUsers(cursor)
         # showmenu(logged_user)
@@ -57,20 +58,45 @@ async def handle_clients(reader: asyncio.StreamReader, writer: asyncio.StreamWri
         cipher = AES.new(trunk_encoded_key, AES.MODE_EAX, nonce=option[:16])
         option_str = cipher.decrypt(option[16:])
         while (option_str.decode() != "3"):
-            print(option_str.decode())
             if (option_str.decode() == "1"):
-                print(f"cliente {connected_address[0]} realizó una consulta de saldo")
+                async with lock:
+                    conn, cursor = connectDB()
+                    print(f"procesando consulta de saldo del cliente {connected_address[0]}")
+                    msg = consultarSaldo(logged_user,cursor)
+                    cursor.close()
+                    conn.close()
+                print(f"consulta de saldo del cliente {connected_address[0]} realizada con éxito")
                 cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
-                ciphertext, tag = cipher.encrypt_and_digest(("Elegiste la opción 1 \n"+ menu).encode())
+                ciphertext, tag = cipher.encrypt_and_digest((f"\n {msg} \n\n"+ menu).encode())
                 writer.write(cipher.nonce + ciphertext)
                 await writer.drain()
                 option = await reader.read(1024)
                 cipher = AES.new(trunk_encoded_key, AES.MODE_EAX, nonce=option[:16])
                 option_str = cipher.decrypt(option[16:])
             elif (option_str.decode() == "2"):
-                print(f"cliente {connected_address[0]} realizó una transferencia de saldo")
                 cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
-                ciphertext, tag = cipher.encrypt_and_digest(("Elegiste la opción 2\n" + menu).encode())
+                ciphertext, tag = cipher.encrypt_and_digest("\n ingresa la cantidad que quieras enviar: ".encode())
+                writer.write(cipher.nonce + ciphertext)
+                await writer.drain()
+                cantidad = await reader.read(1024)
+                cipher = AES.new(trunk_encoded_key, AES.MODE_EAX, nonce=cantidad[:16])
+                cantidad_str = cipher.decrypt(cantidad[16:])
+                cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
+                ciphertext, tag = cipher.encrypt_and_digest("ingresa la cuenta clabe destino: ".encode())
+                writer.write(cipher.nonce + ciphertext)
+                await writer.drain()
+                cuenta_dest = await reader.read(1024)
+                cipher = AES.new(trunk_encoded_key, AES.MODE_EAX, nonce=cuenta_dest[:16])
+                cuenta_dest_str = cipher.decrypt(cuenta_dest[16:])
+                async with lock:
+                    conn, cursor = connectDB()
+                    print(f"procesando transferencia del cliente {connected_address[0]}")
+                    msg = transferenciaSaldo(logged_user,conn,cursor,cantidad_str.decode(),cuenta_dest_str.decode())
+                    cursor.close()
+                    conn.close()
+                print(f"transferencia de saldo exitosa del cliente {connected_address[0]}")
+                cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
+                ciphertext, tag = cipher.encrypt_and_digest((f"\n {msg} \n\n"+ menu).encode())
                 writer.write(cipher.nonce + ciphertext)
                 await writer.drain()
                 option = await reader.read(1024)
@@ -92,12 +118,15 @@ async def handle_clients(reader: asyncio.StreamReader, writer: asyncio.StreamWri
     ciphertext, tag = cipher.encrypt_and_digest((msg + " Salir").encode())
     writer.write(cipher.nonce + ciphertext)
     print(f"se ha cerrado la conexión con el cliente {connected_address[0]}")
+    cursor.close()
+    conn.close()
     writer.close()
     await writer.wait_closed()
 
-async def login(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, cursor):
+async def login(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    conn, cursor = connectDB()
     cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest("Bienvenido a tu banca, para iniciar por favor introduce tu nombre de usuario: ".encode())
+    ciphertext, tag = cipher.encrypt_and_digest("Para iniciar por favor introduce tu nombre de usuario: ".encode())
     writer.write(cipher.nonce + ciphertext)
     await writer.drain()
     username = await reader.read(1024)
@@ -106,6 +135,8 @@ async def login(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, curs
     #Busca al usuario en la base de datos.
     cursor.execute("SELECT * FROM usuarios WHERE username=%s", (username_str.decode(),))
     user = cursor.fetchone()
+    cursor.close()
+    conn.close()
     if user:
         print(f"{user[2]} encontrado")
         cipher = AES.new(trunk_encoded_key,AES.MODE_EAX)
