@@ -4,12 +4,11 @@ from dotenv import load_dotenv
 from Crypto.Cipher import AES
 import os, re, ssl
 
-from server import CERTIFICATE_PATH
-
 load_dotenv()
 
 HOST = os.environ.get('HOST')
 PORT = os.environ.get('PORT')
+CERTIFICATE_PATH = os.environ.get('CERTIFICATE_PATH')
 shared_key = os.getenv('CRYPTOKEY')
 if not shared_key:
     raise ValueError("La variable de entorno SHARED_KEY no está definida en el archivo .env")
