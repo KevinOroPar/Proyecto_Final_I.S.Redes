@@ -118,8 +118,6 @@ async def handle_clients(reader: asyncio.StreamReader, writer: asyncio.StreamWri
     ciphertext, tag = cipher.encrypt_and_digest((msg + " Salir").encode())
     writer.write(cipher.nonce + ciphertext)
     print(f"se ha cerrado la conexión con el cliente {connected_address[0]}")
-    cursor.close()
-    conn.close()
     writer.close()
     await writer.wait_closed()
 

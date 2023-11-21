@@ -17,7 +17,7 @@ config = {
 def connectDB():
   try:
     conn = mysql.connector.connect(**config)
-    print("Conexión establecida")
+    print("Conexión establecida con la base de datos")
   except mysql.connector.Error as err:
     if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
       print("Usuario o contraseña incorrectos.")
