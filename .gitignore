@@ -2,7 +2,4 @@
 .venv
 .vscode
 __pycache__
-imss.crt
-imss.key
-casa.crt
-casa.key
+ssl_utils
